@@ -1,0 +1,31 @@
+# Binaries for programs and plugins
+main
+cpm
+*.exe
+*.exe~
+*.so
+*.dylib
+*.dll
+
+# Ignore binary output folders
+bin/
+
+# Ignore common editor/system specific metadata
+.DS_Store
+.idea/
+.vscode/
+*.iml
+
+# ENV
+.env
+
+# vweb and database
+*.db
+*.js
+
+
+*.c
+*.exe
+.cpm_build
+cpm_modules
+cpm.json
