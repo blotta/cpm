@@ -18,26 +18,27 @@ struct CpmFlags {
 // 	libs         ?[]string
 // }
 
-struct CpmConfig {
+struct CpmPackage {
 	// CpmPackage
 	name    string
 	version string
 	// entry        string
 	output       string
-	dependencies map[string]CpmConfig
+	dependencies map[string]CpmPackage
 
+mut:
 	include_dirs ?[]string
 	lib_dirs     ?[]string
 	libs         ?[]string
 }
 
-fn load_config() !CpmConfig {
+fn load_config() !CpmPackage {
 	data := os.read_file('cpm.json')!
 	println("config read")
-	return json.decode(CpmConfig, data)
+	return json.decode(CpmPackage, data)
 }
 
-fn save_config(cfg CpmConfig) {
+fn save_config(cfg CpmPackage) {
 	os.write_file('cpm.json', json.encode_pretty(cfg)) or {
 		eprintln('Failed to save cpm.json: ${err}')
 	}
@@ -48,8 +49,8 @@ fn file_mtime(path string) i64 {
 	return info.mtime
 }
 
-fn merge_pacakge(a CpmConfig, b CpmConfig) CpmConfig {
-	c := CpmConfig{
+fn merge_pacakge(a CpmPackage, b CpmPackage) CpmPackage {
+	c := CpmPackage{
 		include_dirs: if dirs := b.include_dirs { dirs } else { a.include_dirs }
 		lib_dirs: if dirs := b.lib_dirs { dirs } else { a.lib_dirs }
 		libs: if libs := b.libs { libs } else { a.libs }
@@ -57,19 +58,19 @@ fn merge_pacakge(a CpmConfig, b CpmConfig) CpmConfig {
 	return c
 }
 
-fn load_package(dep string) CpmConfig {
+fn load_package(dep string) CpmPackage {
 	cfg:= load_config() or {panic("no config")}
 	dep_dir := os.join_path('cpm_modules', dep)
-	mut pkg := CpmConfig{
+	mut pkg := CpmPackage{
 		include_dirs: ["include"]
 		lib_dirs: ["lib"]
 		libs: [dep]
 	}
 
-	pkg_file := os.join_path(dep_dir, 'cpm-package.json')
+	pkg_file := os.join_path(dep_dir, 'cpm.json')
 	if os.exists(pkg_file) {
 		pkg_data := os.read_file(pkg_file) or { panic("Error reading file: ${pkg_file}") }
-		pkg = json.decode(CpmConfig, pkg_data) or { panic("Error parsing file: ${pkg_file}")}
+		pkg = json.decode(CpmPackage, pkg_data) or { panic("Error parsing file: ${pkg_file}")}
 	}
 
 
@@ -87,12 +88,12 @@ fn cmd_test() {
 }
 
 fn cmd_init() {
-	cfg := CpmConfig{
+	cfg := CpmPackage{
 		name:    os.base(os.getwd())
 		version: '0.1.0'
 		// entry:        'main.c'
 		output:       'app.exe'
-		dependencies: map[string]CpmConfig{}
+		dependencies: map[string]CpmPackage{}
 	}
 	save_config(cfg)
 	println('Created cpm.json')
@@ -130,14 +131,14 @@ fn load_all_flags() CpmFlags {
 		if inc_dirs := pkg.include_dirs {
 			for dir in inc_dirs {
 				inc_path := os.join_path(dep_dir, dir)
-				include_flags << "-I.\\${inc_path}"
+				include_flags << "-I./${inc_path}"
 			}
 		}
 
 		if lib_dirs := pkg.lib_dirs {
 			for dir in lib_dirs {
 				lib_path := os.join_path(dep_dir, dir)
-				lib_flags << "-L.\\${lib_path}"
+				lib_flags << "-L./${lib_path}"
 			}
 		}
 
@@ -182,8 +183,8 @@ fn cmd_build() {
 
 		// compile only if .o is missing or source changed
 		if o_mtime < c_mtime {
-			println('Compiling ${c_file} -> ${obj_file}')
 			compile_cmd := 'gcc -c ${c_file} ${flags.include_flags.join(' ')} -o ${obj_file}'
+			println('Compiling ${c_file} -> ${obj_file}: ${compile_cmd}')
 			os.system(compile_cmd)
 		} else {
 			println('Up-to-date ${c_file}')
@@ -202,8 +203,8 @@ fn cmd_run() {
 		eprintln("Run 'cpm init' first.")
 		return
 	}
-	println('Running .\\${cfg.output}')
-	os.system('.\\${cfg.output}')
+	println('Running ./${cfg.output}')
+	os.system('./${cfg.output}')
 }
 
 fn cmd_help() {
