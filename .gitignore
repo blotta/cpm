@@ -26,6 +26,6 @@ bin/
 
 *.c
 *.exe
-.cpm_build
-cpm_modules
+.cpm
+myproj
 cpm.json

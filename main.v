@@ -1,246 +1,181 @@
 module main
 
 import os
+import cli
 import json
-// import time
-
-struct CpmFlags {
-	include_flags []string
-	lib_flags     []string
-	libs         []string
-}
-
-// struct CpmPackage {
-// 	// name         string
-// 	// version      string
-// 	include_dirs ?[]string
-// 	lib_dirs     ?[]string
-// 	libs         ?[]string
-// }
 
 struct CpmPackage {
-	// CpmPackage
-	name    string
-	version string
-	// entry        string
-	output       string
-	dependencies map[string]CpmPackage
-
+	name       string = 'app'
+	version    string = '0.1.0'
+	source_dir string = 'src'
 mut:
-	include_dirs ?[]string
-	lib_dirs     ?[]string
-	libs         ?[]string
+	c_compiler   string
+	cpp_compiler string
+	dependencies map[string]CpmPackage
 }
 
-fn load_config() !CpmPackage {
-	data := os.read_file('cpm.json')!
-	println("config read")
-	return json.decode(CpmPackage, data)
-}
-
-fn save_config(cfg CpmPackage) {
-	os.write_file('cpm.json', json.encode_pretty(cfg)) or {
-		eprintln('Failed to save cpm.json: ${err}')
-	}
-}
-
-fn file_mtime(path string) i64 {
-	info := os.stat(path) or { return 0 }
-	return info.mtime
-}
-
-fn merge_pacakge(a CpmPackage, b CpmPackage) CpmPackage {
+fn CpmPackage.default() CpmPackage {
+	proj_name := os.base(os.getwd())
 	c := CpmPackage{
-		include_dirs: if dirs := b.include_dirs { dirs } else { a.include_dirs }
-		lib_dirs: if dirs := b.lib_dirs { dirs } else { a.lib_dirs }
-		libs: if libs := b.libs { libs } else { a.libs }
+		name: proj_name
 	}
 	return c
 }
 
-fn load_package(dep string) CpmPackage {
-	cfg:= load_config() or {panic("no config")}
-	dep_dir := os.join_path('cpm_modules', dep)
-	mut pkg := CpmPackage{
-		include_dirs: ["include"]
-		lib_dirs: ["lib"]
-		libs: [dep]
-	}
-
-	pkg_file := os.join_path(dep_dir, 'cpm.json')
-	if os.exists(pkg_file) {
-		pkg_data := os.read_file(pkg_file) or { panic("Error reading file: ${pkg_file}") }
-		pkg = json.decode(CpmPackage, pkg_data) or { panic("Error parsing file: ${pkg_file}")}
-	}
-
-
-	if cfg_pkg := cfg.dependencies[dep] {
-		pkg = merge_pacakge(pkg, cfg_pkg)
-	}
-
-	return pkg
+fn CpmPackage.load() !CpmPackage {
+	data := os.read_file('cpm.json')!
+	return json.decode(CpmPackage, data)
 }
 
-fn cmd_test() {
-	pkg := load_all_flags()
-
-	println(pkg)
-}
-
-fn cmd_init() {
-	cfg := CpmPackage{
-		name:    os.base(os.getwd())
-		version: '0.1.0'
-		// entry:        'main.c'
-		output:       'app.exe'
-		dependencies: map[string]CpmPackage{}
-	}
-	save_config(cfg)
-	println('Created cpm.json')
-}
-
-fn load_all_flags() CpmFlags {
-	cfg := load_config() or {
-		panic("Config not found")
-	}
-
-	mut include_flags := []string{}
-	mut lib_flags := []string{}
-	mut libs := []string{}
-
-	// this project's flags
-	if inc_dirs := cfg.include_dirs {
-		for i in inc_dirs {
-			include_flags << "-I${i}"
-		}
-	}
-
-	mut deps := []string{}
-	// dependencies flags
-	dirs := os.ls("cpm_modules") or {[]}
-	for dep in dirs {
-		deps << dep
-		// println("dep: ${dep}")
-
-		dep_dir := os.join_path("cpm_modules", dep)
-		// println("dep_dir: ${dep_dir}")
-
-		pkg := load_package(dep)
-		// println("pkg: ${pkg}")
-
-		if inc_dirs := pkg.include_dirs {
-			for dir in inc_dirs {
-				inc_path := os.join_path(dep_dir, dir)
-				include_flags << "-I./${inc_path}"
-			}
-		}
-
-		if lib_dirs := pkg.lib_dirs {
-			for dir in lib_dirs {
-				lib_path := os.join_path(dep_dir, dir)
-				lib_flags << "-L./${lib_path}"
-			}
-		}
-
-		if pkg_libs := pkg.libs {
-			for lib in pkg_libs {
-				libs << "-l${lib}"
-			}
-		}
-	}
-
-	return CpmFlags{
-		include_flags: include_flags
-		lib_flags: lib_flags
-		libs: libs
+fn (c CpmPackage) save() {
+	os.write_file('cpm.json', json.encode_pretty(c)) or {
+		eprintln('Failed to save cpm.json: ${err}')
 	}
 }
 
-fn cmd_build() {
-	cfg := load_config() or {
-		eprintln("Run 'cpm init' first.")
-		return
+fn (mut c CpmPackage) build() ! {
+	mut obj_files := []string{}
+	c_files := find_source_files_recursive(c.source_dir, .c)
+	if c_files.len > 0 {
+		obj_files << c.compile_files_lang(c_files, .c)!
 	}
 
-	flags := load_all_flags()
-
-	os.mkdir_all('.cpm_build') or {}
-
-	// find all .c files
-	files := os.ls('.') or { [] }
-	mut c_files := []string{}
-	for f in files {
-		if f.ends_with('.c') {
-			c_files << f
-		}
+	cpp_files := find_source_files_recursive(c.source_dir, .cpp)
+	if cpp_files.len > 0 {
+		obj_files << c.compile_files_lang(cpp_files, .cpp)!
 	}
 
-	mut object_files := []string{}
-	for c_file in c_files {
-		obj_file := '.cpm_build/${os.file_name(c_file).replace('.c', '.o')}'
-		c_mtime := file_mtime(c_file)
-		o_mtime := file_mtime(obj_file)
-
-		// compile only if .o is missing or source changed
-		if o_mtime < c_mtime {
-			compile_cmd := 'gcc -c ${c_file} ${flags.include_flags.join(' ')} -o ${obj_file}'
-			println('Compiling ${c_file} -> ${obj_file}: ${compile_cmd}')
-			os.system(compile_cmd)
-		} else {
-			println('Up-to-date ${c_file}')
-		}
-		object_files << obj_file
-	}
-
-	// Link step
-	link_cmd := 'gcc ${object_files.join(' ')} ${flags.lib_flags.join(' ')} ${flags.libs.join(' ')} -o ${cfg.output}'
-	println('Linking: ${link_cmd}')
-	os.system(link_cmd)
+	c.link_files()!
 }
 
-fn cmd_run() {
-	cfg := load_config() or {
-		eprintln("Run 'cpm init' first.")
-		return
+fn (mut c CpmPackage) link_files() ! {
+	obj_dir := os.join_path('.cpm', 'obj')
+	obj_c_files := os.walk_ext(obj_dir, '.c.obj')
+	obj_cpp_files := os.walk_ext(obj_dir, '.cpp.obj')
+	println('obj files: ${obj_c_files}, ${obj_cpp_files}')
+
+	lang := if obj_cpp_files.len > 0 { LANG.cpp } else { LANG.c }
+	cfg_compiler := if lang == .c { c.c_compiler } else { c.cpp_compiler }
+
+	cc := match cfg_compiler {
+		'' { Compiler.detect_for_lang(lang)! }
+		else { Compiler.new(cfg_compiler)! }
 	}
-	println('Running ./${cfg.output}')
-	os.system('./${cfg.output}')
+	println('${lang} linker: ${cc.executable}')
+
+	mut obj_files := []string{}
+	obj_files << obj_c_files
+	obj_files << obj_cpp_files
+	cc.link_objs(obj_files, c.output_file())!
 }
 
-fn cmd_help() {
-	println('Usage: cpm <command>')
-	println('  init		initialize project in the current directory')
-	println('  install	install packages')
-	println('  run		run project')
+fn (c CpmPackage) output_file() string {
+	mut output := c.name
+
+	if os.user_os() == 'windows' {
+		output += '.exe'
+	}
+
+	return output
 }
 
+fn (c CpmPackage) obj_dir() string {
+	obj_dir := os.join_path('.cpm', 'obj')
+	return obj_dir
+}
+
+fn (mut c CpmPackage) compile_files_lang(src_files []string, lang LANG) ![]string {
+	cfg_compiler := if lang == .c { c.c_compiler } else { c.cpp_compiler }
+	cc := match cfg_compiler {
+		'' { Compiler.detect_for_lang(lang)! }
+		else { Compiler.new(cfg_compiler)! }
+	}
+
+	// println('${lang} compiler: ${cc.executable}')
+	obj_dir := os.join_path('.cpm', 'obj')
+	os.mkdir_all(obj_dir) or { return error('could not create obj directory') }
+
+	mut obj_files := []string{}
+	for src_file in src_files {
+		obj_file := os.base(src_file) + '.obj'
+		obj_path := os.join_path(obj_dir, obj_file)
+		cc.compile_file(src_file, obj_path)!
+		obj_files << obj_path
+	}
+
+	// println(obj_files)
+	return obj_files
+}
+
+fn (c CpmPackage) clean() ! {
+	if os.exists(c.output_file()) {
+		os.rm(c.output_file())!
+	}
+
+	os.rmdir_all(c.obj_dir())!
+}
+
+fn (mut c CpmPackage) run() ! {
+	if !os.exists(c.output_file()) {
+		c.build()!
+	}
+
+	run_process_cross_plat([c.output_file()])!
+}
+
+fn find_source_files_recursive(source_dir string, lang LANG) []string {
+	ext := match lang {
+		.c { '.c' }
+		.cpp { '.cpp' }
+	}
+
+	c_src := os.walk_ext(source_dir, ext, os.WalkParams{ hidden: false })
+	return c_src
+}
 
 fn main() {
-	args := os.args
-	if args.len < 2 {
-		cmd_help()
-		return
+	mut cfg := CpmPackage.load() or { CpmPackage.default() }
+
+	mut app := cli.Command{
+		name:        'cpm'
+		description: 'C Project Manager'
+		commands:    [
+			cli.Command{
+				name:    'init'
+				execute: fn [cfg] (cmd cli.Command) ! {
+					println(cfg)
+					cfg.save()
+					return
+				}
+			},
+			cli.Command{
+				name:    'build'
+				execute: fn [mut cfg] (cmd cli.Command) ! {
+					cfg.build() or { eprintln(err) }
+					return
+				}
+			},
+			cli.Command{
+				name:    'run'
+				execute: fn [mut cfg] (cmd cli.Command) ! {
+					cfg.build() or {
+						eprintln(err)
+						return
+					}
+					cfg.run() or { eprintln(err) }
+					return
+				}
+			},
+			cli.Command{
+				name:    'clean'
+				execute: fn [mut cfg] (cmd cli.Command) ! {
+					cfg.clean() or { eprintln(err) }
+					return
+				}
+			},
+		]
 	}
 
-	match args[1] {
-		'help' {
-			cmd_help()
-		}
-		'build' {
-			cmd_build()
-		}
-		'run' {
-			cmd_build()
-			cmd_run()
-		}
-		'init' {
-			cmd_init()
-		}
-		'test' {
-			cmd_test()
-		}
-		else {
-			eprintln('Unknown command: ${args[1]}')
-		}
-	}
+	app.setup()
+	app.parse(os.args)
 }
