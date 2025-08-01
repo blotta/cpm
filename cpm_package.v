@@ -39,6 +39,31 @@ fn (c CpmPackage) save() {
 	}
 }
 
+fn (c CpmPackage) find_source_files_recursive(source_dir string, lang LANG) []string {
+	ext := match lang {
+		.c { '.c' }
+		.cpp { '.cpp' }
+	}
+
+	src_files := os.walk_ext(source_dir, ext, os.WalkParams{ hidden: false })
+	return src_files
+}
+
+fn (c CpmPackage) output_file() string {
+	mut output := c.name
+
+	if os.user_os() == 'windows' {
+		output += '.exe'
+	}
+
+	return output
+}
+
+fn (c CpmPackage) obj_dir() string {
+	obj_dir := os.join_path('.cpm', 'obj')
+	return obj_dir
+}
+
 fn (mut c CpmPackage) build() ! {
 	mut obj_files := []string{}
 
@@ -53,6 +78,38 @@ fn (mut c CpmPackage) build() ! {
 	}
 
 	c.link_files()!
+}
+
+fn (mut c CpmPackage) compile_files_lang(src_files []string, lang LANG, include_dirs []string, compile_flags []string) ![]string {
+	cfg_compiler := if lang == .c { c.c_compiler } else { c.cpp_compiler }
+	cc := match cfg_compiler {
+		'' { Compiler.detect_for_lang(lang)! }
+		else { Compiler.new(cfg_compiler)! }
+	}
+
+	println('${lang} compiler: ${cc.executable}')
+	obj_dir := os.join_path('.cpm', 'obj')
+	os.mkdir_all(obj_dir) or { return error('could not create obj directory') }
+
+	mut obj_files := []string{}
+	for src_file in src_files {
+		obj_file := os.base(src_file) + '.obj'
+		obj_path := os.join_path(obj_dir, obj_file)
+
+		if os.exists(obj_path) {
+			src_mtime := os.file_last_mod_unix(src_file)
+			obj_mtime := os.file_last_mod_unix(obj_path)
+			if obj_mtime > src_mtime {
+				println('Up-to-date ${src_file}. Skipping compilation')
+				continue
+			}
+		}
+		cc.compile_file(src_file, obj_path, include_dirs, compile_flags)!
+		obj_files << obj_path
+	}
+
+	// println(obj_files)
+	return obj_files
 }
 
 fn (mut c CpmPackage) link_files() ! {
@@ -76,58 +133,25 @@ fn (mut c CpmPackage) link_files() ! {
 	cc.link_objs(obj_files, c.output_file(), c.lib_dirs, c.libs, c.link_flags)!
 }
 
-fn (c CpmPackage) output_file() string {
-	mut output := c.name
-
-	if os.user_os() == 'windows' {
-		output += '.exe'
-	}
-
-	return output
-}
-
-fn (c CpmPackage) obj_dir() string {
-	obj_dir := os.join_path('.cpm', 'obj')
-	return obj_dir
-}
-
-fn (mut c CpmPackage) compile_files_lang(src_files []string, lang LANG, include_dirs []string, compile_flags []string) ![]string {
-	cfg_compiler := if lang == .c { c.c_compiler } else { c.cpp_compiler }
-	cc := match cfg_compiler {
-		'' { Compiler.detect_for_lang(lang)! }
-		else { Compiler.new(cfg_compiler)! }
-	}
-
-	println('${lang} compiler: ${cc.executable}')
-	obj_dir := os.join_path('.cpm', 'obj')
-	os.mkdir_all(obj_dir) or { return error('could not create obj directory') }
-
-	mut obj_files := []string{}
-	for src_file in src_files {
-		obj_file := os.base(src_file) + '.obj'
-		obj_path := os.join_path(obj_dir, obj_file)
-		cc.compile_file(src_file, obj_path, include_dirs, compile_flags)!
-		obj_files << obj_path
-	}
-
-	// println(obj_files)
-	return obj_files
-}
 
 fn (c CpmPackage) clean() ! {
 	if os.exists(c.output_file()) {
+		println(c.output_file())
 		os.rm(c.output_file())!
 	}
 
-	pdbs := os.glob('*.pdb') or {
-		eprintln('failed to grab *.pdb files: ${err}')
-		[]
-	}
-	for f in pdbs {
-		os.rm(f)!
+	files := os.ls(".") or {[]}
+	for f in files {
+		if os.file_ext(f) == ".pdb" {
+			println(f)
+			os.rm(f)!
+		}
 	}
 
-	os.rmdir_all(c.obj_dir())!
+	if os.exists(c.obj_dir()) {
+		println(c.obj_dir())
+		os.rmdir_all(c.obj_dir())!
+	}
 }
 
 fn (mut c CpmPackage) run() ! {
@@ -138,13 +162,3 @@ fn (mut c CpmPackage) run() ! {
 	run_process_cross_plat([c.output_file()])!
 }
 
-
-fn (c CpmPackage) find_source_files_recursive(source_dir string, lang LANG) []string {
-	ext := match lang {
-		.c { '.c' }
-		.cpp { '.cpp' }
-	}
-
-	src_files := os.walk_ext(source_dir, ext, os.WalkParams{ hidden: false })
-	return src_files
-}
