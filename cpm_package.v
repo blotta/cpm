@@ -113,9 +113,16 @@ fn (mut c CpmPackage) compile_files_lang(src_files []string, lang LANG, include_
 		}
 		if parallel_compilation {
 			wg.add(1)
-			go fn(cc Compiler, src_file string, obj_path string, include_dirs []string, compile_flags []string, mut wg sync.WaitGroup) ! {
-				cc.compile_file(src_file, obj_path, include_dirs, compile_flags)!
-				wg.done()
+			go fn(cc Compiler, src_file string, obj_path string, include_dirs []string, compile_flags []string, mut wg sync.WaitGroup) {
+				mut done := false
+				cc.compile_file(src_file, obj_path, include_dirs, compile_flags) or {
+					wg.done()
+					done = true
+				}
+
+				if !done {
+					wg.done()
+				}
 			}(cc, src_file, obj_path, include_dirs, compile_flags, mut wg)
 		} else {
 			cc.compile_file(src_file, obj_path, include_dirs, compile_flags)!
