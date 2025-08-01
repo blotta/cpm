@@ -79,8 +79,14 @@ fn (cc Compiler) compile_file(src string, obj string, include_dirs []string, com
 		// omit cl logo
 		cmd << "/nologo"
 
+		// enable parallel compilation
+		cmd << "/MP"
+
 		//object flag
 		cmd << "/c"
+
+		// flag for concurrency. Makes .pdb access save accross parallel processes
+		cmd << "/FS"
 
 		// source file
 		cmd << src
