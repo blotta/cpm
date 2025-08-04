@@ -5,20 +5,29 @@ import json
 import sync
 import arrays
 
-struct CpmPackage {
-	name       string = 'app'
-	version    string = '0.1.0'
-	source_dir string = 'src'
-	parallel_compilation bool = true
+struct BuildContext {
 mut:
-	c_compiler    string
-	cpp_compiler  string
-	include_dirs  []string
-	lib_dirs      []string
-	libs          []string
-	compile_flags []string
-	link_flags    []string
-	dependencies  map[string]CpmPackage
+	mode string = 'default'
+}
+
+struct CpmPackage {
+	name                 string = 'app'
+	version              string = '0.1.0'
+	source_dir           string = 'src'
+	parallel_compilation bool   = true
+	output               string
+	c_compiler           string
+	cpp_compiler         string
+	include_dirs         []string
+	lib_dirs             []string
+	libs                 []string
+	compile_flags        []string
+	link_flags           []string
+	modes                map[string]CpmPackage
+	dependencies         map[string]CpmPackage
+
+mut:
+	ctx BuildContext @[json: '-']
 }
 
 fn CpmPackage.default() CpmPackage {
@@ -55,7 +64,11 @@ fn (c CpmPackage) find_source_files_recursive(source_dir string, lang LANG) []st
 fn (c CpmPackage) output_file() string {
 	mut output := c.name
 
-	if os.user_os() == 'windows' {
+	if c.output != '' {
+		output = c.output
+	}
+
+	if os.user_os() == 'windows' && !output.ends_with('.exe') {
 		output += '.exe'
 	}
 
@@ -63,11 +76,98 @@ fn (c CpmPackage) output_file() string {
 }
 
 fn (c CpmPackage) obj_dir() string {
+	println(c.ctx.mode)
 	obj_dir := os.join_path('.cpm', 'obj')
 	return obj_dir
 }
 
-fn (mut c CpmPackage) build() ! {
+fn (c CpmPackage) clone_with_mode(mode string) !CpmPackage {
+	m := c.modes[mode] or { return error('No mode named ${mode} in configuration') }
+
+	// additive fields
+	mut compile_flags := c.compile_flags.clone()
+	mut include_dirs := c.include_dirs.clone()
+	mut lib_dirs := c.lib_dirs.clone()
+	mut libs := c.libs.clone()
+	mut link_flags := c.link_flags.clone()
+
+	compile_flags << m.compile_flags
+	include_dirs << m.include_dirs
+	lib_dirs << m.lib_dirs
+	libs << m.libs
+	link_flags << m.link_flags
+
+	mut dependencies := c.dependencies.clone()
+	for k, v in m.dependencies {
+		dependencies[k] = v
+	}
+
+	pkg := CpmPackage{
+		name:                 if m.name != '' { m.name } else { c.name }
+		version:              if m.version != '' { m.version } else { c.version }
+		c_compiler:           if m.c_compiler != '' { m.c_compiler } else { c.c_compiler }
+		cpp_compiler:         if m.cpp_compiler != '' { m.cpp_compiler } else { c.cpp_compiler }
+		source_dir:           if m.source_dir != '' { m.source_dir } else { c.source_dir }
+		parallel_compilation: if m.parallel_compilation == false {
+			false
+		} else {
+			c.parallel_compilation
+		}
+		output:               if m.output != '' { m.output } else { c.output }
+		compile_flags:        compile_flags
+		include_dirs:         include_dirs
+		lib_dirs:             lib_dirs
+		libs:                 libs
+		link_flags:           link_flags
+		dependencies:         dependencies
+
+		ctx: BuildContext{
+			...c.ctx
+			mode: mode
+		}
+	}
+
+	return pkg
+}
+
+fn (c CpmPackage) clone_with_dependencies_applied() CpmPackage {
+	mut compile_flags := c.compile_flags.clone()
+	mut include_dirs := c.include_dirs.clone()
+	mut lib_dirs := c.lib_dirs.clone()
+	mut libs := c.libs.clone()
+	mut link_flags := c.link_flags.clone()
+
+	for k, v in c.dependencies {
+		dep_path := os.join_path('dependencies', k)
+
+		for inc in v.include_dirs {
+			inc_path := os.join_path(dep_path, inc)
+			include_dirs << inc_path
+		}
+
+		compile_flags << v.compile_flags
+
+		for ld in v.lib_dirs {
+			ld_path := os.join_path(dep_path, ld)
+			lib_dirs << ld_path
+		}
+
+		libs << v.libs
+
+		link_flags << v.link_flags
+	}
+
+	return CpmPackage{
+		...c
+		compile_flags: compile_flags
+		include_dirs:  include_dirs
+		lib_dirs:      lib_dirs
+		libs:          libs
+		link_flags:    link_flags
+	}
+}
+
+fn (c CpmPackage) build() ! {
 	mut obj_files := []string{}
 
 	mut include_dirs := []string{}
@@ -76,16 +176,6 @@ fn (mut c CpmPackage) build() ! {
 	include_dirs << c.include_dirs
 	compile_flags << c.compile_flags
 
-	// get dependencies include_dirs & compile_flags
-	for k, v in c.dependencies {
-		dep_path := os.join_path("dependencies", k)
-		for inc in v.include_dirs {
-			inc_path := os.join_path(dep_path, inc)
-			include_dirs << inc_path
-		}
-		compile_flags << v.compile_flags
-	}
-
 	c_files := c.find_source_files_recursive(c.source_dir, .c)
 	if c_files.len > 0 {
 		obj_files << c.compile_files_lang(c_files, .c, include_dirs, compile_flags, c.parallel_compilation)!
@@ -93,13 +183,14 @@ fn (mut c CpmPackage) build() ! {
 
 	cpp_files := c.find_source_files_recursive(c.source_dir, .cpp)
 	if cpp_files.len > 0 {
-		obj_files << c.compile_files_lang(cpp_files, .cpp, include_dirs, compile_flags, c.parallel_compilation)!
+		obj_files << c.compile_files_lang(cpp_files, .cpp, include_dirs, compile_flags,
+			c.parallel_compilation)!
 	}
 
 	c.link_files()!
 }
 
-fn (mut c CpmPackage) compile_files_lang(src_files []string, lang LANG, include_dirs []string, compile_flags []string, parallel_compilation bool) ![]string {
+fn (c CpmPackage) compile_files_lang(src_files []string, lang LANG, include_dirs []string, compile_flags []string, parallel_compilation bool) ![]string {
 	cfg_compiler := if lang == .c { c.c_compiler } else { c.cpp_compiler }
 	cc := match cfg_compiler {
 		'' { Compiler.detect_for_lang(lang)! }
@@ -107,7 +198,7 @@ fn (mut c CpmPackage) compile_files_lang(src_files []string, lang LANG, include_
 	}
 
 	println('${lang} compiler: ${cc.executable}')
-	obj_dir := os.join_path('.cpm', 'obj')
+	obj_dir := c.obj_dir()
 	os.mkdir_all(obj_dir) or { return error('could not create obj directory') }
 
 	mut obj_files := []string{}
@@ -120,7 +211,7 @@ fn (mut c CpmPackage) compile_files_lang(src_files []string, lang LANG, include_
 		// obj_file := os.base(src_file) + '.obj'
 		obj_file := src_file + '.obj'
 		obj_path := os.join_path(obj_dir, obj_file)
-		os.mkdir_all(os.dir(obj_path)) or { return error('could not create mirror obj directory')}
+		os.mkdir_all(os.dir(obj_path)) or { return error('could not create mirror obj directory') }
 		obj_files << obj_path
 
 		if os.exists(obj_path) {
@@ -133,7 +224,7 @@ fn (mut c CpmPackage) compile_files_lang(src_files []string, lang LANG, include_
 		}
 		if parallel_compilation {
 			wg.add(1)
-			go fn(cc Compiler, src_file string, obj_path string, include_dirs []string, compile_flags []string, mut wg sync.WaitGroup, err_chan chan IError) ! {
+			go fn (cc Compiler, src_file string, obj_path string, include_dirs []string, compile_flags []string, mut wg sync.WaitGroup, err_chan chan IError) ! {
 				defer {
 					wg.done()
 				}
@@ -155,7 +246,7 @@ fn (mut c CpmPackage) compile_files_lang(src_files []string, lang LANG, include_
 	return obj_files
 }
 
-fn (mut c CpmPackage) link_files() ! {
+fn (c CpmPackage) link_files() ! {
 	obj_dir := os.join_path('.cpm', 'obj')
 	obj_c_files := os.walk_ext(obj_dir, '.c.obj')
 	obj_cpp_files := os.walk_ext(obj_dir, '.cpp.obj')
@@ -198,20 +289,13 @@ fn (mut c CpmPackage) link_files() ! {
 	libs << c.libs
 	link_flags << c.link_flags
 
-	// get dependencies lib_dirs & libs & link_flags
-	for k, v in c.dependencies {
-		dep_path := os.join_path("dependencies", k)
-		for ld in v.lib_dirs {
-			ld_path := os.join_path(dep_path, ld)
-			lib_dirs << ld_path
-		}
-		libs << v.libs
-		link_flags << v.link_flags
+	output := c.output_file()
+	if os.dir(output) != '.' {
+		os.mkdir_all(os.dir(output)) or { return error('could not create output directory') }
 	}
 
 	cc.link_objs(obj_files, c.output_file(), lib_dirs, libs, link_flags)!
 }
-
 
 fn (c CpmPackage) clean() ! {
 	if os.exists(c.output_file()) {
@@ -219,9 +303,9 @@ fn (c CpmPackage) clean() ! {
 		os.rm(c.output_file())!
 	}
 
-	files := os.ls(".") or {[]}
+	files := os.ls('.') or { [] }
 	for f in files {
-		if os.file_ext(f) == ".pdb" {
+		if os.file_ext(f) == '.pdb' {
 			println(f)
 			os.rm(f)!
 		}
@@ -240,4 +324,3 @@ fn (mut c CpmPackage) run() ! {
 
 	run_process_cross_plat([c.output_file()])!
 }
-
