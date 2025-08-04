@@ -96,6 +96,10 @@ fn (mut c CpmPackage) compile_files_lang(src_files []string, lang LANG, include_
 
 	mut obj_files := []string{}
 	mut wg := sync.new_waitgroup()
+	mut err_chan := chan IError{cap: src_files.len}
+	defer {
+		err_chan.close()
+	}
 	for src_file in src_files {
 		// obj_file := os.base(src_file) + '.obj'
 		obj_file := src_file + '.obj'
@@ -113,24 +117,25 @@ fn (mut c CpmPackage) compile_files_lang(src_files []string, lang LANG, include_
 		}
 		if parallel_compilation {
 			wg.add(1)
-			go fn(cc Compiler, src_file string, obj_path string, include_dirs []string, compile_flags []string, mut wg sync.WaitGroup) {
-				mut done := false
+			go fn(cc Compiler, src_file string, obj_path string, include_dirs []string, compile_flags []string, mut wg sync.WaitGroup, err_chan chan IError) ! {
+				defer {
+					wg.done()
+				}
 				cc.compile_file(src_file, obj_path, include_dirs, compile_flags) or {
-					wg.done()
-					done = true
+					err_chan <- err
 				}
-
-				if !done {
-					wg.done()
-				}
-			}(cc, src_file, obj_path, include_dirs, compile_flags, mut wg)
+			}(cc, src_file, obj_path, include_dirs, compile_flags, mut wg, err_chan)
 		} else {
 			cc.compile_file(src_file, obj_path, include_dirs, compile_flags)!
 		}
 	}
+
 	wg.wait()
 
-	// println(obj_files)
+	if err_chan.len > 0 {
+		return <-err_chan
+	}
+
 	return obj_files
 }
 
