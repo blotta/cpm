@@ -76,7 +76,6 @@ fn (c CpmPackage) output_file() string {
 }
 
 fn (c CpmPackage) obj_dir() string {
-	println(c.ctx.mode)
 	obj_dir := os.join_path('.cpm', 'obj')
 	return obj_dir
 }
@@ -322,5 +321,6 @@ fn (mut c CpmPackage) run() ! {
 		c.build()!
 	}
 
-	run_process_cross_plat([c.output_file()])!
+	cmd := [c.output_file()]
+	run_process_cross_plat(cmd)!
 }

@@ -5,6 +5,8 @@ import os
 fn run_process_cross_plat(cmd []string) ! {
 	mut rcmd := []string{}
 
+	println('> ${cmd.join(' ')}')
+
 	if os.user_os() == 'windows' {
 		rcmd << ['C:\\Windows\\System32\\cmd.exe', '/c']
 	}

@@ -131,7 +131,6 @@ fn (cc Compiler) compile_file(src string, obj string, include_dirs []string, com
 		cmd << ['-o', obj]
 	}
 
-	println('> ${cmd.join(' ')}')
 	run_process_cross_plat(cmd)!
 }
 
@@ -197,6 +196,5 @@ fn (cc Compiler) link_objs(obj_files []string, output string, lib_dirs []string,
 
 	}
 
-	println('> ${cmd.join(' ')}')
 	run_process_cross_plat(cmd)!
 }
