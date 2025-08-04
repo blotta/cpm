@@ -70,14 +70,30 @@ fn (c CpmPackage) obj_dir() string {
 fn (mut c CpmPackage) build() ! {
 	mut obj_files := []string{}
 
+	mut include_dirs := []string{}
+	mut compile_flags := []string{}
+
+	include_dirs << c.include_dirs
+	compile_flags << c.compile_flags
+
+	// get dependencies include_dirs & compile_flags
+	for k, v in c.dependencies {
+		dep_path := os.join_path("dependencies", k)
+		for inc in v.include_dirs {
+			inc_path := os.join_path(dep_path, inc)
+			include_dirs << inc_path
+		}
+		compile_flags << v.compile_flags
+	}
+
 	c_files := c.find_source_files_recursive(c.source_dir, .c)
 	if c_files.len > 0 {
-		obj_files << c.compile_files_lang(c_files, .c, c.include_dirs, c.compile_flags, c.parallel_compilation)!
+		obj_files << c.compile_files_lang(c_files, .c, include_dirs, compile_flags, c.parallel_compilation)!
 	}
 
 	cpp_files := c.find_source_files_recursive(c.source_dir, .cpp)
 	if cpp_files.len > 0 {
-		obj_files << c.compile_files_lang(cpp_files, .cpp, c.include_dirs, c.compile_flags, c.parallel_compilation)!
+		obj_files << c.compile_files_lang(cpp_files, .cpp, include_dirs, compile_flags, c.parallel_compilation)!
 	}
 
 	c.link_files()!
@@ -174,7 +190,26 @@ fn (mut c CpmPackage) link_files() ! {
 		}
 	}
 
-	cc.link_objs(obj_files, c.output_file(), c.lib_dirs, c.libs, c.link_flags)!
+	mut lib_dirs := []string{}
+	mut libs := []string{}
+	mut link_flags := []string{}
+
+	lib_dirs << c.lib_dirs
+	libs << c.libs
+	link_flags << c.link_flags
+
+	// get dependencies lib_dirs & libs & link_flags
+	for k, v in c.dependencies {
+		dep_path := os.join_path("dependencies", k)
+		for ld in v.lib_dirs {
+			ld_path := os.join_path(dep_path, ld)
+			lib_dirs << ld_path
+		}
+		libs << v.libs
+		link_flags << v.link_flags
+	}
+
+	cc.link_objs(obj_files, c.output_file(), lib_dirs, libs, link_flags)!
 }
 
 
