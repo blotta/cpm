@@ -29,6 +29,7 @@ fn main() {
 		commands:    [
 			cli.Command{
 				name:    'init'
+				description: 'Initialize a cpm project by creating a cpm.json file in the current directory'
 				execute: fn [cfg] (cmd cli.Command) ! {
 					cfg.save()
 					return
@@ -36,6 +37,7 @@ fn main() {
 			},
 			cli.Command{
 				name:    'cfg'
+				description: 'Print the final build configuration'
 				execute: fn [mut cfg] (cmd cli.Command) ! {
 					cfg = build_cfg(cmd.args, cfg)!
 					println(cfg)
@@ -44,6 +46,7 @@ fn main() {
 			},
 			cli.Command{
 				name:    'build'
+				description: 'Build the project. Accepts a "mode" argument'
 				execute: fn [mut cfg] (cmd cli.Command) ! {
 					cfg = build_cfg(cmd.args, cfg)!
 
@@ -53,6 +56,7 @@ fn main() {
 			},
 			cli.Command{
 				name:    'run'
+				description: 'Build and run project. Accepts a "mode" argument'
 				execute: fn [mut cfg] (cmd cli.Command) ! {
 					cfg = build_cfg(cmd.args, cfg)!
 
@@ -66,6 +70,7 @@ fn main() {
 			},
 			cli.Command{
 				name:    'clean'
+				description: 'Clean object files and other build artifacts'
 				execute: fn [mut cfg] (cmd cli.Command) ! {
 					cfg.clean() or { eprintln(err) }
 					return

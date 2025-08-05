@@ -28,4 +28,4 @@ bin/
 *.exe
 .cpm
 myproj
-cpm.json
+cpm.*
