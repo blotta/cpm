@@ -27,7 +27,7 @@ struct CpmPackage {
 	dependencies         map[string]CpmPackage
 
 mut:
-	ctx BuildContext @[json: '-']
+	ctx BuildContext @[skip]
 }
 
 fn CpmPackage.default() CpmPackage {
@@ -45,8 +45,28 @@ fn CpmPackage.load() !CpmPackage {
 	return json.decode(CpmPackage, data)
 }
 
+fn CpmPackage.build_cfg(args []string, cfg CpmPackage) !CpmPackage {
+	mut c := cfg
+
+	if args.len > 0 {
+		c = c.clone_with_mode(args[0])!
+		println('Applied mode "${args[0]}"')
+	}
+
+	if c.dependencies.keys().len > 0 {
+		c = c.clone_with_dependencies_applied()
+		println('Applied dependencies')
+	}
+
+	return c
+}
+
+fn (c CpmPackage) json() string {
+	return json.encode_pretty(c)
+}
+
 fn (c CpmPackage) save() {
-	os.write_file('cpm.json', json.encode_pretty(c)) or {
+	os.write_file('cpm.json', c.json()) or {
 		eprintln('Failed to save cpm.json: ${err}')
 	}
 }

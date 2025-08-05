@@ -3,23 +3,6 @@ module main
 import os
 import cli
 
-fn build_cfg(args []string, cfg CpmPackage) !CpmPackage {
-
-	mut c := cfg
-
-	if args.len > 0 {
-		c = c.clone_with_mode(args[0])!
-		println('Applied mode "${args[0]}"')
-	}
-
-	if c.dependencies.keys().len > 0 {
-		c = c.clone_with_dependencies_applied()
-		println('Applied dependencies')
-	}
-
-	return c
-}
-
 fn main() {
 	mut cfg := CpmPackage.load() or { CpmPackage.default() }
 
@@ -28,37 +11,40 @@ fn main() {
 		description: 'C Project Manager'
 		commands:    [
 			cli.Command{
-				name:    'init'
+				name:        'init'
 				description: 'Initialize a cpm project by creating a cpm.json file in the current directory'
-				execute: fn [cfg] (cmd cli.Command) ! {
+				execute:     fn [cfg] (cmd cli.Command) ! {
 					cfg.save()
 					return
 				}
 			},
 			cli.Command{
-				name:    'cfg'
+				name:        'cfg'
+				usage:       '[mode]'
 				description: 'Print the final build configuration'
-				execute: fn [mut cfg] (cmd cli.Command) ! {
-					cfg = build_cfg(cmd.args, cfg)!
-					println(cfg)
+				execute:     fn [mut cfg] (cmd cli.Command) ! {
+					cfg = CpmPackage.build_cfg(cmd.args, cfg)!
+					println(cfg.json())
 					return
 				}
 			},
 			cli.Command{
-				name:    'build'
-				description: 'Build the project. Accepts a "mode" argument'
-				execute: fn [mut cfg] (cmd cli.Command) ! {
-					cfg = build_cfg(cmd.args, cfg)!
+				name:        'build'
+				usage:       '[mode]'
+				description: 'Build the project'
+				execute:     fn [mut cfg] (cmd cli.Command) ! {
+					cfg = CpmPackage.build_cfg(cmd.args, cfg)!
 
 					cfg.build() or { eprintln(err) }
 					return
 				}
 			},
 			cli.Command{
-				name:    'run'
-				description: 'Build and run project. Accepts a "mode" argument'
-				execute: fn [mut cfg] (cmd cli.Command) ! {
-					cfg = build_cfg(cmd.args, cfg)!
+				name:        'run'
+				usage:       '[mode]'
+				description: 'Build and run project'
+				execute:     fn [mut cfg] (cmd cli.Command) ! {
+					cfg = CpmPackage.build_cfg(cmd.args, cfg)!
 
 					cfg.build() or {
 						eprintln(err)
@@ -69,9 +55,9 @@ fn main() {
 				}
 			},
 			cli.Command{
-				name:    'clean'
+				name:        'clean'
 				description: 'Clean object files and other build artifacts'
-				execute: fn [mut cfg] (cmd cli.Command) ! {
+				execute:     fn [mut cfg] (cmd cli.Command) ! {
 					cfg.clean() or { eprintln(err) }
 					return
 				}
