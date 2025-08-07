@@ -2,6 +2,20 @@ module main
 
 import os
 import cli
+import log
+
+const log_level = log.Level.debug
+
+fn init() {
+	log.set_level(.warn)
+
+	for _, arg in os.args {
+		if arg in ['--verbose', '-v'] {
+			log.set_level(.info)
+			break
+		}
+	}
+}
 
 fn main() {
 	mut cfg := CpmPackage.load() or { CpmPackage.default() }
@@ -9,7 +23,23 @@ fn main() {
 	mut app := cli.Command{
 		name:        'cpm'
 		description: 'C Project Manager'
+		flags:       [
+			cli.Flag{
+				flag:        .bool
+				name:        'verbose'
+				abbrev:      'v'
+				description: 'Enable verbose output'
+			},
+		]
 		commands:    [
+			cli.Command{
+				name:        'version'
+				description: 'Print CPM version'
+				execute:     fn (cmd cli.Command) ! {
+					println('0.5.0')
+					return
+				}
+			},
 			cli.Command{
 				name:        'init'
 				description: 'Initialize a cpm project by creating a cpm.json file in the current directory'
@@ -35,7 +65,7 @@ fn main() {
 				execute:     fn [mut cfg] (cmd cli.Command) ! {
 					cfg = CpmPackage.build_cfg(cmd.args, cfg)!
 
-					cfg.build() or { eprintln(err) }
+					cfg.build() or { log.error('${err}') }
 					return
 				}
 			},
@@ -47,10 +77,10 @@ fn main() {
 					cfg = CpmPackage.build_cfg(cmd.args, cfg)!
 
 					cfg.build() or {
-						eprintln(err)
+						log.error('${err}')
 						return
 					}
-					cfg.run() or { eprintln(err) }
+					cfg.run() or { log.error('${err}') }
 					return
 				}
 			},
@@ -58,7 +88,7 @@ fn main() {
 				name:        'clean'
 				description: 'Clean object files and other build artifacts'
 				execute:     fn [mut cfg] (cmd cli.Command) ! {
-					cfg.clean() or { eprintln(err) }
+					cfg.clean() or { log.error('${err}') }
 					return
 				}
 			},
