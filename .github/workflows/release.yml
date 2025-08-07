@@ -1,0 +1,56 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            suffix: linux-amd64
+            ext: ''
+          - os: windows-latest
+            suffix: windows-amd64
+            ext: '.exe'
+          - os: macos-latest
+            suffix: macos-amd64
+            ext: ''
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install V
+        run: |
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            curl -L https://github.com/vlang/v/releases/latest/download/v_linux.zip -o v.zip
+          elif [[ "$RUNNER_OS" == "macOS" ]]; then
+            curl -L https://github.com/vlang/v/releases/latest/download/v_macos.zip -o v.zip
+          else
+            curl -L https://github.com/vlang/v/releases/latest/download/v_windows.zip -o v.zip
+          fi
+          unzip v.zip -d vlang
+          echo "$PWD/vlang" >> $GITHUB_PATH
+
+      - name: Build
+        run: |
+          v -prod -o cpm${{ matrix.ext }} .
+
+      - name: Rename & Zip
+        run: |
+          mkdir dist
+          mv cpm${{ matrix.ext }} dist/cpm-${{ github.ref_name }}-${{ matrix.suffix }}${{ matrix.ext }}
+          cd dist
+          zip cpm-${{ github.ref_name }}-${{ matrix.suffix }}.zip cpm-${{ github.ref_name }}-${{ matrix.suffix }}${{ matrix.ext }}
+
+      - name: Upload to Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
