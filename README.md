@@ -20,22 +20,20 @@ and build the source files located in the `src` directory. Without a `cpm.json` 
 
 ```json
 {
-	"name":	"<directory name>",
-	"version":	"0.1.0",
-	"source_dir":	"src",
-	"parallel_compilation":	true,
-	"output":	"",
-	"c_compiler":	"",
-	"cpp_compiler":	"",
-	"include_dirs":	["include"],
-	"lib_dirs":	["lib"],
-	"libs":	[],
-	"compile_flags": [],
-	"link_flags": [],
-	"modes": {
-	},
-	"dependencies":	{
-	}
+  "name": "<directory name>",
+  "version": "0.1.0",
+  "source_dirs": ["recursive::src"],
+  "parallel_compilation": true,
+  "output": "",
+  "c_compiler": "",
+  "cpp_compiler": "",
+  "include_dirs": ["include"],
+  "lib_dirs": ["lib"],
+  "libs": [],
+  "compile_flags": [],
+  "link_flags": [],
+  "modes": {},
+  "dependencies":  {}
 }
 ```
 
@@ -43,34 +41,38 @@ These are all the possible configurations variables this file can have and this 
 
 ### Compiler Support
 
-Currently, the supported C compilers are `gcc`, `clang`, `cl`. The supported C++ compilers are `g++`, `clang++`, `cl`. If not specified in the configuration file, CPM will look for each of them in the mentioned order on the system path.
+Currently, the supported C compilers are `gcc`, `clang`, `cl` and the supported C++ compilers are `g++`, `clang++`, `cl`. If not specified in the configuration file, CPM will look for each of them in the mentioned order on the system path.
+
+
+### Source Directories
+
+The `source_dirs` property determines the directories where CPM will search for source files. It will look for `.c` and `.cpp` files on each directory on the list. The `recursive::` modifier can be prefixed for subdirectory searches.
 
 ### Modes
 
-Modes are mean't for customizing the compilation mode, such as "debug" or "release". 
+Modes are meant for customizing the compilation mode, such as "debug" or "release". 
 
 ```json
 {
-	"name":	"myapp",
-	"version":	"0.1.0",
-	"source_dir":	"src",
-	"parallel_compilation":	true,
-	"output":	"",
-	"c_compiler":	"",
-	"cpp_compiler":	"",
-	"include_dirs":	["include"],
-	"lib_dirs":	["lib"],
-	"libs":	[],
-	"compile_flags": [],
-	"link_flags": [],
-	"modes": {
-		"mydebug": {
-            "name": "myapp-debug",
-			"compile_flags": ["-g", "-DDEBUG"]
-		}
-	},
-	"dependencies":	{
-	}
+  "name": "myapp",
+  "version": "0.1.0",
+  "source_dirs": ["recursive::src"],
+  "parallel_compilation": true,
+  "output": "",
+  "c_compiler": "",
+  "cpp_compiler": "",
+  "include_dirs": ["include"],
+  "lib_dirs": ["lib"],
+  "libs": [],
+  "compile_flags": [],
+  "link_flags": [],
+  "modes": {
+    "mydebug": {
+      "name": "myapp-debug",
+      "compile_flags": ["-g", "-DDEBUG"]
+    }
+  },
+  "dependencies": {}
 }
 ```
 
@@ -79,22 +81,20 @@ When running `cpm build mydebug`, the top level configuration will essentially b
 
 ```json
 {
-	"name":	"myapp-debug",
-	"version":	"0.1.0",
-	"source_dir":	"src",
-	"parallel_compilation":	true,
-	"output":	"",
-	"c_compiler":	"",
-	"cpp_compiler":	"",
-	"include_dirs":	["include"],
-	"lib_dirs":	["lib"],
-	"libs":	[],
-	"compile_flags": ["-g", "-DDEBUG"],
-	"link_flags": [],
-	"modes": {
-	},
-	"dependencies":	{
-	}
+  "name": "myapp-debug",
+  "version": "0.1.0",
+  "source_dirs": ["recursive::src"],
+  "parallel_compilation": true,
+  "output": "",
+  "c_compiler": "",
+  "cpp_compiler": "",
+  "include_dirs": ["include"],
+  "lib_dirs": ["lib"],
+  "libs": [],
+  "compile_flags": ["-g", "-DDEBUG"],
+  "link_flags": [],
+  "modes": {},
+  "dependencies": {}
 }
 ```
 
@@ -104,27 +104,26 @@ CPM will look in the `dependencies` directory for the keys specified. The follow
 
 ```json
 {
-	"name":	"myapp",
-	"version":	"0.1.0",
-	"source_dir":	"src",
-	"parallel_compilation":	true,
-	"output":	"",
-	"c_compiler":	"",
-	"cpp_compiler":	"",
-	"include_dirs":	["include"],
-	"lib_dirs":	["lib"],
-	"libs":	[],
-	"compile_flags": [],
-	"link_flags": [],
-	"modes": {
-	},
-	"dependencies":	{
-        "mydep": {
-			"include_dirs": [ "include" ],
-			"lib_dirs": ["lib"],
-            "lib": ["mydep"]
-        }
-	}
+  "name": "myapp",
+  "version": "0.1.0",
+  "source_dirs": ["recursive::src"],
+  "parallel_compilation": true,
+  "output": "",
+  "c_compiler": "",
+  "cpp_compiler": "",
+  "include_dirs": ["include"],
+  "lib_dirs": ["lib"],
+  "libs": [],
+  "compile_flags": [],
+  "link_flags": [],
+  "modes": {},
+  "dependencies": {
+    "mydep": {
+      "include_dirs": [ "include" ],
+      "lib_dirs": ["lib"],
+      "lib": ["mydep"]
+    }
+  }
 }
 ```
 
@@ -132,21 +131,19 @@ The configuration above will essentially turn the top level configuration into t
 
 ```json
 {
-	"name":	"myapp",
-	"version":	"0.1.0",
-	"source_dir":	"src",
-	"parallel_compilation":	true,
-	"output":	"",
-	"c_compiler":	"",
-	"cpp_compiler":	"",
-	"include_dirs":	["include", "dependencies/mydep/include"],
-	"lib_dirs":	["lib", "dependencies/mydep/lib"],
-	"libs":	["mydep"],
-	"compile_flags": [],
-	"link_flags": [],
-	"modes": {
-	},
-	"dependencies":	{
-	}
+  "name":"myapp",
+  "version":"0.1.0",
+  "source_dirs": ["recursive::src"],
+  "parallel_compilation":true,
+  "output": "",
+  "c_compiler": "",
+  "cpp_compiler": "",
+  "include_dirs": ["include", "dependencies/mydep/include"],
+  "lib_dirs": ["lib", "dependencies/mydep/lib"],
+  "libs": ["mydep"],
+  "compile_flags": [],
+  "link_flags": [],
+  "modes": {},
+  "dependencies":{}
 }
 ```

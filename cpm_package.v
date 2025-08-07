@@ -140,14 +140,12 @@ fn (c CpmPackage) clone_with_mode(mode string) !CpmPackage {
 		version:      if m.version != '' { m.version } else { c.version }
 		c_compiler:   if m.c_compiler != '' { m.c_compiler } else { c.c_compiler }
 		cpp_compiler: if m.cpp_compiler != '' { m.cpp_compiler } else { c.cpp_compiler }
-
-		// source_dir:           if m.source_dir != '' { m.source_dir } else { c.source_dir }
+		output:               if m.output != '' { m.output } else { c.output }
 		parallel_compilation: if m.parallel_compilation == false {
 			false
 		} else {
 			c.parallel_compilation
 		}
-		output:               if m.output != '' { m.output } else { c.output }
 		source_dirs:          source_dirs
 		compile_flags:        compile_flags
 		include_dirs:         include_dirs
@@ -166,6 +164,7 @@ fn (c CpmPackage) clone_with_mode(mode string) !CpmPackage {
 }
 
 fn (c CpmPackage) clone_with_dependencies_applied() CpmPackage {
+	mut source_dirs := c.source_dirs.clone()
 	mut compile_flags := c.compile_flags.clone()
 	mut include_dirs := c.include_dirs.clone()
 	mut lib_dirs := c.lib_dirs.clone()
@@ -174,6 +173,11 @@ fn (c CpmPackage) clone_with_dependencies_applied() CpmPackage {
 
 	for k, v in c.dependencies {
 		dep_path := os.join_path('dependencies', k)
+
+		for src in v.source_dirs {
+			src_path := os.join_path(dep_path, src)
+			source_dirs << src_path
+		}
 
 		for inc in v.include_dirs {
 			inc_path := os.join_path(dep_path, inc)
@@ -194,6 +198,7 @@ fn (c CpmPackage) clone_with_dependencies_applied() CpmPackage {
 
 	return CpmPackage{
 		...c
+		source_dirs:   source_dirs
 		compile_flags: compile_flags
 		include_dirs:  include_dirs
 		lib_dirs:      lib_dirs
