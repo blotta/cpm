@@ -22,13 +22,13 @@ jobs:
             ext: ''
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      
       - name: Setup Vlang
         uses: vlang/setup-v@v1.3
         with:
-          version: 0.4.11
+          check-latest: true
+
+      - name: Checkout
+        uses: actions/checkout@v4
           
       - name: Build
         run: |
