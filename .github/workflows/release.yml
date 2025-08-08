@@ -36,13 +36,25 @@ jobs:
       - name: Build
         run: |
           v -prod -o cpm${{ matrix.ext }} .
-
-      - name: Rename & Zip
+      
+      - name: Prepare Dist
         run: |
           mkdir dist
-          mv cpm${{ matrix.ext }} dist/cpm-${{ github.ref_name }}-${{ matrix.suffix }}${{ matrix.ext }}
+          mv cpm${{ matrix.ext }} dist/cpm${{ matrix.ext }}
+        shell: bash
+
+      - name: Zip (Unix)
+        if: runner.os != 'Windows'
+        run: |
           cd dist
-          zip cpm-${{ github.ref_name }}-${{ matrix.suffix }}.zip cpm-${{ github.ref_name }}-${{ matrix.suffix }}${{ matrix.ext }}
+          zip ../cpm-${{ github.ref_name }}-${{ matrix.suffix }}.zip cpm${{ matrix.ext }}
+        shell: bash
+
+      - name: Zip (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          Compress-Archive -Path dist/cpm${{ matrix.ext }} -DestinationPath cpm-${{ github.ref_name }}-${{ matrix.suffix }}.zip
+        shell: pwsh
 
       - name: Upload to Release
         uses: softprops/action-gh-release@v1
