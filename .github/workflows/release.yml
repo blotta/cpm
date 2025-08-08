@@ -24,19 +24,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Install V
-        run: |
-          if [[ "$RUNNER_OS" == "Linux" ]]; then
-            curl -L https://github.com/vlang/v/releases/download/0.4.11/v_linux.zip -o v.zip
-          elif [[ "$RUNNER_OS" == "macOS" ]]; then
-            curl -L https://github.com/vlang/v/releases/download/0.4.11/v_macos_x86_64.zip -o v.zip
-          else
-            curl -L https://github.com/vlang/v/releases/download/0.4.11/v_windows.zip -o v.zip
-          fi
-          unzip v.zip -d vlang
-          echo "$PWD/vlang" >> $GITHUB_PATH
-
+      
+      - name: Setup Vlang
+        uses: vlang/setup-v@v1.3
+        with:
+          version: 0.4.11
+          
       - name: Build
         run: |
           v -prod -o cpm${{ matrix.ext }} .
