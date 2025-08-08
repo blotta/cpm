@@ -20,6 +20,22 @@ fn init() {
 fn main() {
 	mut cfg := CpmPackage.load() or { CpmPackage.default() }
 
+	mut cpm_args := []string{}
+	mut non_cpm_args := []string{}
+	mut found_double_dash := false
+	for arg in os.args {
+		if !found_double_dash {
+			if arg == '--' {
+				found_double_dash = true
+				continue
+			}
+			cpm_args << arg
+		}
+		if found_double_dash {
+			non_cpm_args << arg
+		}
+	}
+
 	mut app := cli.Command{
 		name:        'cpm'
 		description: 'C Project Manager'
@@ -71,16 +87,17 @@ fn main() {
 			},
 			cli.Command{
 				name:        'run'
-				usage:       '[mode]'
+				usage:       '[mode] -- [run args]'
 				description: 'Build and run project'
-				execute:     fn [mut cfg] (cmd cli.Command) ! {
+				execute:     fn [mut cfg, non_cpm_args] (cmd cli.Command) ! {
 					cfg = CpmPackage.build_cfg(cmd.args, cfg)!
 
 					cfg.build() or {
 						log.error('${err}')
 						return
 					}
-					cfg.run() or { log.error('${err}') }
+
+					cfg.run(non_cpm_args) or { log.error('${err}') }
 					return
 				}
 			},
@@ -96,5 +113,5 @@ fn main() {
 	}
 
 	app.setup()
-	app.parse(os.args)
+	app.parse(cpm_args)
 }

@@ -84,12 +84,8 @@ fn (c CpmPackage) find_source_files_recursive(source_dir string) []string {
 
 fn (c CpmPackage) find_source_files(source_dir string) []string {
 	mut src_files := []string{}
-	for ext in ['.c', '.cpp'] {
-		path := os.join_path(source_dir, '*${ext}')
-		for filename in os.glob(path) or { [] } {
-			src_files << os.join_path(source_dir, filename)
-		}
-	}
+	files := os.ls(source_dir) or { [] }
+	src_files << files.filter(it.ends_with('.c') || it.ends_with('.cpp')).map(os.join_path(source_dir, it))
 	return src_files
 }
 
@@ -136,10 +132,10 @@ fn (c CpmPackage) clone_with_mode(mode string) !CpmPackage {
 	}
 
 	pkg := CpmPackage{
-		name:         if m.name != '' { m.name } else { c.name }
-		version:      if m.version != '' { m.version } else { c.version }
-		c_compiler:   if m.c_compiler != '' { m.c_compiler } else { c.c_compiler }
-		cpp_compiler: if m.cpp_compiler != '' { m.cpp_compiler } else { c.cpp_compiler }
+		name:                 if m.name != '' { m.name } else { c.name }
+		version:              if m.version != '' { m.version } else { c.version }
+		c_compiler:           if m.c_compiler != '' { m.c_compiler } else { c.c_compiler }
+		cpp_compiler:         if m.cpp_compiler != '' { m.cpp_compiler } else { c.cpp_compiler }
 		output:               if m.output != '' { m.output } else { c.output }
 		parallel_compilation: if m.parallel_compilation == false {
 			false
@@ -393,11 +389,15 @@ fn (c CpmPackage) clean() ! {
 	}
 }
 
-fn (mut c CpmPackage) run() ! {
+fn (mut c CpmPackage) run(run_args []string) ! {
 	if !os.exists(c.output_file()) {
 		c.build()!
 	}
 
-	cmd := [c.output_file()]
+	mut cmd := [os.join_path('.', c.output_file())]
+
+	if run_args.len > 0 {
+		cmd << run_args
+	}
 	run_process_cross_plat(cmd)!
 }
