@@ -29,6 +29,7 @@ jobs:
         uses: vlang/setup-v@v1.3
         with:
           check-latest: true
+          stable: true
 
       - name: Checkout
         uses: actions/checkout@v4
