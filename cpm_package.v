@@ -242,7 +242,7 @@ fn (c CpmPackage) compile_files(src_files []string, include_dirs []string, compi
 	os.mkdir_all(obj_dir) or { return error('could not create obj directory') }
 
 	mut obj_files := []string{}
-	mut wg := sync.new_waitgroup()
+	mut threads := []thread{}
 	mut err_chan := chan IError{cap: src_files.len}
 	defer {
 		err_chan.close()
@@ -274,21 +274,17 @@ fn (c CpmPackage) compile_files(src_files []string, include_dirs []string, compi
 			}
 		}
 		if parallel_compilation {
-			wg.add(1)
-			go fn (comp Compiler, src_file string, obj_path string, include_dirs []string, compile_flags []string, mut wg sync.WaitGroup, err_chan chan IError) ! {
-				defer {
-					wg.done()
-				}
+			threads << go fn (comp Compiler, src_file string, obj_path string, include_dirs []string, compile_flags []string, err_chan chan IError) {
 				comp.compile_file(src_file, obj_path, include_dirs, compile_flags) or {
 					err_chan <- err
 				}
-			}(comp, src_file, obj_path, include_dirs, compile_flags, mut wg, err_chan)
+			}(comp, src_file, obj_path, include_dirs, compile_flags, err_chan)
 		} else {
 			comp.compile_file(src_file, obj_path, include_dirs, compile_flags)!
 		}
 	}
 
-	wg.wait()
+	threads.wait()
 
 	if err_chan.len > 0 {
 		return <-err_chan

@@ -36,7 +36,7 @@ jobs:
           
       - name: Build
         run: |
-          v -prod -o cpm${{ matrix.ext }} .
+          v -o cpm${{ matrix.ext }} .
       
       - name: Prepare Dist
         run: |
