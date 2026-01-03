@@ -52,7 +52,7 @@ fn main() {
 				name:        'version'
 				description: 'Print CPM version'
 				execute:     fn (cmd cli.Command) ! {
-					println('0.5.0')
+					println('0.5.1')
 					return
 				}
 			},

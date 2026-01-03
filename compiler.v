@@ -13,8 +13,8 @@ struct Compiler {
 }
 
 fn Compiler.detect_for_lang(lang LANG) !Compiler {
-	c_compilers := ['gcc', 'clang', 'cl']
-	cpp_compilers := ['g++', 'clang++', 'cl']
+	c_compilers := ['gcc', 'clang', 'cl', 'clang-cl', 'emcc']
+	cpp_compilers := ['g++', 'clang++', 'cl', 'clang-cl', 'emcc']
 
 	if lang == .c {
 		for c in c_compilers {
@@ -63,6 +63,18 @@ fn Compiler.new(cc string) !Compiler {
 				language:   LANG.cpp
 			}
 		}
+		'clang-cl' {
+			Compiler{
+				executable: cc
+				language:   LANG.cpp
+			}
+		}
+		'emcc' {
+			Compiler{
+				executable: cc
+				language:   LANG.cpp
+			}
+		}
 		else {
 			return error('Compiler ${cc} not supported')
 		}
@@ -74,7 +86,7 @@ fn (cc Compiler) compile_file(src string, obj string, include_dirs []string, com
 	mut cmd := []string{}
 	cmd << cc.executable
 
-	if cc.executable == 'cl' {
+	if cc.executable == 'cl' || cc.executable == 'clang-cl' {
 
 		// omit cl logo
 		cmd << "/nologo"
@@ -107,7 +119,7 @@ fn (cc Compiler) compile_file(src string, obj string, include_dirs []string, com
 		// output
 		cmd << "/Fo:${obj}"
 
-	} else { // gcc, g++, clang, clang++
+	} else { // gcc, g++, clang, clang++, emcc
 		// object flag
 		cmd << '-c'
 
@@ -138,17 +150,12 @@ fn (cc Compiler) link_objs(obj_files []string, output string, lib_dirs []string,
 	mut cmd := []string{}
 	cmd << cc.executable
 
-	if cc.executable == 'cl' {
+	if cc.executable == 'cl' || cc.executable == 'clang-cl' {
 		// omit cl logo
 		cmd << "/nologo"
 
 		// object files
 		cmd << obj_files
-
-		// libraries to link to
-		for lib in libs {
-			cmd << lib
-		}
 
 		// output
 		cmd << "/Fe:${output}"
@@ -160,7 +167,12 @@ fn (cc Compiler) link_objs(obj_files []string, output string, lib_dirs []string,
 		for lib_dir in lib_dirs {
 			cmd << "/LIBPATH:${lib_dir}"
 		}
-		
+
+		// libraries to link to
+		for lib in libs {
+			cmd << lib
+		}
+
 		// other flags
 		for flag in link_flags {
 			for arg in flag.split_by_space() {

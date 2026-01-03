@@ -1,7 +1,7 @@
 Module {
 	name: 'cpm'
 	description: 'C Package Manager'
-	version: '0.5.0'
+	version: '0.5.1'
 	license: 'MIT'
 	dependencies: []
 }
